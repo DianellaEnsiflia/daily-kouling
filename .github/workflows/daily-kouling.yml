@@ -1,0 +1,20 @@
+name: daily-kouling
+on:
+  schedule:
+    - cron: '30 13 * * *'  # 21:30北京时间 = 13:30 UTC
+  workflow_dispatch:  # 允许手动点一下立即发
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install xlrd
+      - name: Send kouling
+        env:
+          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+        run: python daily_kouling.py
