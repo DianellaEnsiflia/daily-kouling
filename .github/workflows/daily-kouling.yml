@@ -1,7 +1,7 @@
 ﻿name: daily-kouling
 on:
   schedule:
-    - cron: ''0 7 * * *''  # 15:00 Beijing = 07:00 UTC
+    - cron: '0 7 * * *'  # 15:00 Beijing = 07:00 UTC
   workflow_dispatch:  # 允许手动点一下立即发
 jobs:
   send:
