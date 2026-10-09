@@ -4,7 +4,10 @@
 """
 import os
 import smtplib
-import xlrd
+try:
+    import xlrd
+except ImportError:  # 没有 xlrd 也能跑（走内置 fallback 口诀）
+    xlrd = None
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -21,12 +24,44 @@ ALT_XLS = r"E:\资料\系统集成\十大领域背诵口诀第3版教（下载�
 
 DOMAINS = ["整合管理","范围管理","进度管理","成本管理","质量管理","资源管理","沟通管理","风险管理","采购管理","干系人管理"]
 
+BEISONG_PATH = os.path.join(os.path.dirname(__file__), "背诵清单.md")
+
+
+def load_beisong_cards():
+    """从《背诵清单》里切成一张张"今日背诵卡"（按 ## / ### 标题分段）。
+    ★ 标记的重点卡会被放两次，出现频率翻倍。"""
+    if not os.path.exists(BEISONG_PATH):
+        return []
+    text = open(BEISONG_PATH, encoding="utf-8").read()
+    cards, title, lines = [], None, []
+    for line in text.splitlines():
+        if line.startswith("### "):
+            if title and "\n".join(lines).strip():
+                cards.append((title, "\n".join(lines).strip()))
+            title, lines = line[4:].strip(), []
+        elif line.startswith("## "):
+            if title and "\n".join(lines).strip():
+                cards.append((title, "\n".join(lines).strip()))
+            title, lines = line[3:].strip(), []
+        elif line.startswith("# "):
+            continue
+        elif title is not None:
+            lines.append(line)
+    if title and "\n".join(lines).strip():
+        cards.append((title, "\n".join(lines).strip()))
+    weighted = []
+    for t, c in cards:
+        weighted.append((t, c))
+        if "★" in t:
+            weighted.append((t, c))  # 重点卡加倍
+    return weighted
+
+
 def get_kouling_text(day_index):
     domain = DOMAINS[day_index % len(DOMAINS)]
-    # 简化：先返回整合管理示例，完整版可按需扩展读取xls
     try:
         path = XLS_PATH if os.path.exists(XLS_PATH) else ALT_XLS
-        if os.path.exists(path):
+        if xlrd is not None and os.path.exists(path):
             wb = xlrd.open_workbook(path)
             # 尝试找到对应sheet
             sheet_names = wb.sheet_names()
@@ -58,9 +93,22 @@ def get_kouling_text(day_index):
     }
     return domain, fallback.get(day_index % 10, domain)
 
-def build_html(domain, text):
+def esc(s):
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def build_html(domain, text, card=None):
     today = datetime.now().strftime("%Y年%m月%d日")
     day_idx = datetime.now().timetuple().tm_yday % 10
+    card_html = ""
+    if card:
+        c_title, c_body = card
+        card_html = f"""
+<div style="padding:20px;border-top:2px dashed #ddd;">
+<div style="font-weight:bold;color:#764ba2;font-size:16px;margin-bottom:8px;">🎯 今日背诵卡：{esc(c_title)}</div>
+<div style="white-space:pre-wrap;line-height:1.7;background:#faf8ff;border-left:4px solid #764ba2;padding:12px;border-radius:4px;font-size:14px;">{esc(c_body)}</div>
+</div>
+"""
     return f"""
 <html><body style="font-family:Microsoft YaHei;padding:20px;background:#f5f5f5;">
 <div style="max-width:600px;margin:0 auto;background:white;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
@@ -68,20 +116,21 @@ def build_html(domain, text):
 <h2 style="margin:0;">📚 每日口诀 - {domain}</h2>
 <p style="margin:6px 0 0 0;opacity:0.9;">{today} · 十大领域 {day_idx+1}/10</p>
 </div>
-<div style="padding:20px;white-space:pre-wrap;line-height:1.6;">{text}</div>
+<div style="padding:20px;white-space:pre-wrap;line-height:1.6;">{esc(text)}</div>
+{card_html}
 <div style="padding:0 20px 20px 20px;color:#999;font-size:12px;border-top:1px solid #eee;margin-top:10px;">
-<p>睡前5分钟，顺一遍口诀。电脑关机也能收到（云端发送）。</p>
+<p>睡前5分钟，顺一遍口诀 + 今日背诵卡。电脑关机也能收到（云端发送）。</p>
 </div>
 </div>
 </body></html>
 """
 
-def send(domain, html):
+def send(domain, html, subject_suffix=""):
     if not EMAIL_PASSWORD:
         print("Missing EMAIL_PASSWORD env")
         return False
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"📚 每日口诀 {domain} - {datetime.now().strftime('%m/%d')}"
+    msg["Subject"] = f"📚 每日口诀 {domain}{subject_suffix} - {datetime.now().strftime('%m/%d')}"
     msg["From"] = EMAIL_ADDRESS
     msg["To"] = TO_EMAIL
     msg.attach(MIMEText("请用HTML查看", "plain", "utf-8"))
@@ -97,5 +146,9 @@ if __name__ == "__main__":
     idx = datetime.now().timetuple().tm_yday % 10
     # 也支持按日期轮换，避免每天相同
     domain, text = get_kouling_text(idx)
-    html = build_html(domain, text)
-    send(domain, html)
+    cards = load_beisong_cards()
+    card = cards[datetime.now().timetuple().tm_yday % len(cards)] if cards else None
+    if card:
+        print(f"今日背诵卡: {card[0]}（共{len(cards)}张卡轮换）")
+    html = build_html(domain, text, card)
+    send(domain, html, subject_suffix=f" + 背诵卡：{card[0][:12]}" if card else "")
