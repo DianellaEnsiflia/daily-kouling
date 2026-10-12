@@ -3,6 +3,7 @@
 即使本地关机也能发
 """
 import os
+import re
 import smtplib
 try:
     import xlrd
@@ -120,6 +121,23 @@ def esc(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def tidy_md(text):
+    """把 markdown 表格/引用/加粗符号整理成纯文本邮件里好读的样子"""
+    out = []
+    for line in text.splitlines():
+        s = line.strip()
+        if re.match(r"^\|[\s:\-|]+\|$", s):        # 表格分隔行 |---|---|
+            continue
+        if s.startswith("|") and s.endswith("|"):    # 表格数据行 -> 用空格对齐
+            cells = [c.strip() for c in s.strip("|").split("|")]
+            out.append("  ".join(c for c in cells if c))
+            continue
+        if s.startswith("> "):                       # 引用符号去掉
+            s = s[2:].strip()
+        out.append(s)
+    return "\n".join(out)
+
+
 def build_html(domain, text, card=None):
     today = datetime.now().strftime("%Y年%m月%d日")
     day_idx = datetime.now().timetuple().tm_yday % 10
@@ -129,7 +147,7 @@ def build_html(domain, text, card=None):
         card_html = f"""
 <div style="padding:20px;border-top:2px dashed #ddd;">
 <div style="font-weight:bold;color:#764ba2;font-size:16px;margin-bottom:8px;">🎯 今日背诵卡：{esc(c_title)}</div>
-<div style="white-space:pre-wrap;line-height:1.7;background:#faf8ff;border-left:4px solid #764ba2;padding:12px;border-radius:4px;font-size:14px;">{esc(c_body)}</div>
+<div style="white-space:pre-wrap;line-height:1.7;background:#faf8ff;border-left:4px solid #764ba2;padding:12px;border-radius:4px;font-size:14px;">{esc(tidy_md(c_body))}</div>
 </div>
 """
     return f"""
@@ -139,7 +157,7 @@ def build_html(domain, text, card=None):
 <h2 style="margin:0;">📚 每日口诀 - {domain}</h2>
 <p style="margin:6px 0 0 0;opacity:0.9;">{today} · 十大领域 {day_idx+1}/10</p>
 </div>
-<div style="padding:20px;white-space:pre-wrap;line-height:1.6;">{esc(text)}</div>
+<div style="padding:20px;white-space:pre-wrap;line-height:1.6;">{esc(tidy_md(text))}</div>
 {card_html}
 <div style="padding:0 20px 20px 20px;color:#999;font-size:12px;border-top:1px solid #eee;margin-top:10px;">
 <p>睡前5分钟，顺一遍口诀 + 今日背诵卡。电脑关机也能收到（云端发送）。</p>
