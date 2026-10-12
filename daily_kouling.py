@@ -25,6 +25,25 @@ ALT_XLS = r"E:\资料\系统集成\十大领域背诵口诀第3版教（下载�
 DOMAINS = ["整合管理","范围管理","进度管理","成本管理","质量管理","资源管理","沟通管理","风险管理","采购管理","干系人管理"]
 
 BEISONG_PATH = os.path.join(os.path.dirname(__file__), "背诵清单.md")
+# 十大领域过程口诀（随仓库走，云端也能读到；不再依赖本机 XLS）
+KOULING_MD = os.path.join(os.path.dirname(__file__), "十大领域口诀.md")
+
+
+def load_kouling_sections():
+    """从《十大领域口诀.md》按 ## 标题切成 领域名 -> 正文"""
+    if not os.path.exists(KOULING_MD):
+        return {}
+    secs, title, lines = {}, None, []
+    for line in open(KOULING_MD, encoding="utf-8").read().splitlines():
+        if line.startswith("## "):
+            if title:
+                secs[title] = "\n".join(lines).strip()
+            title, lines = line[3:].strip(), []
+        elif title is not None:
+            lines.append(line)
+    if title:
+        secs[title] = "\n".join(lines).strip()
+    return secs
 
 
 def load_beisong_cards():
@@ -59,6 +78,10 @@ def load_beisong_cards():
 
 def get_kouling_text(day_index):
     domain = DOMAINS[day_index % len(DOMAINS)]
+    # 首选：仓库内置《十大领域口诀.md》（云端可用，内容最全）
+    for title, body in load_kouling_sections().items():
+        if domain in title and body:
+            return domain, body
     try:
         path = XLS_PATH if os.path.exists(XLS_PATH) else ALT_XLS
         if xlrd is not None and os.path.exists(path):
