@@ -29,7 +29,7 @@ BEISONG_PATH = os.path.join(os.path.dirname(__file__), "背诵清单.md")
 
 def load_beisong_cards():
     """从《背诵清单》里切成一张张"今日背诵卡"（按 ## / ### 标题分段）。
-    ★ 标记的重点卡会被放两次，出现频率翻倍。"""
+    ★ 或 🎯 标记的重点卡会被放两次，出现频率翻倍。"""
     if not os.path.exists(BEISONG_PATH):
         return []
     text = open(BEISONG_PATH, encoding="utf-8").read()
@@ -52,7 +52,7 @@ def load_beisong_cards():
     weighted = []
     for t, c in cards:
         weighted.append((t, c))
-        if "★" in t:
+        if "★" in t or "🎯" in t:  # ★=老标记，🎯=新标记
             weighted.append((t, c))  # 重点卡加倍
     return weighted
 
