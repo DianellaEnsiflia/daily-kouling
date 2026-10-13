@@ -259,6 +259,6 @@ if __name__ == "__main__":
     kandian, wjyou = load_beikao()
     card = build_daily_card(kandian, wjyou, yday)
     if card:
-        print(f"今日背诵卡: {card[0]}（共{len(cards)}张卡轮换）")
+        print(f"今日知识卡: {card[0]}（默写考点{len(kandian)}个 + 万金油{len(wjyou)}条 轮换）")
     html = build_html(domain, text, card)
-    send(domain, html, subject_suffix=f" + 背诵卡：{card[0][:12]}" if card else "")
+    send(domain, html, subject_suffix=f" + 知识卡：{card[0][:12]}" if card else "")
