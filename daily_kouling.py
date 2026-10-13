@@ -28,6 +28,72 @@ DOMAINS = ["整合管理","范围管理","进度管理","成本管理","质量�
 BEISONG_PATH = os.path.join(os.path.dirname(__file__), "背诵清单.md")
 # 十大领域过程口诀（随仓库走，云端也能读到；不再依赖本机 XLS）
 KOULING_MD = os.path.join(os.path.dirname(__file__), "十大领域口诀.md")
+# 必备知识点（听书版）——每日邮件的主要内容来源
+BEIKAO_PATH = os.path.join(os.path.dirname(__file__), "必备知识点-听书版.txt")
+
+# 常见默写题考点里出现的知识领域标题（用于切块）
+AREAS = ["项目立项管理", "项目整合管理", "项目范围管理", "项目进度管理", "项目成本管理",
+         "项目质量管理", "项目资源管理", "项目沟通管理", "项目干系人管理", "项目风险管理",
+         "项目采购管理", "配置管理", "变更管理", "项目管理概论", "项目管理原则"]
+
+
+def load_beikao():
+    """从《必备知识点-听书版.txt》取：默写考点列表 + 万金油条目列表。
+    返回 (kandian, wjyou)；kandian 每项 = {area, title, body:[...]}"""
+    if not os.path.exists(BEIKAO_PATH):
+        return [], []
+    lines = [l.strip() for l in open(BEIKAO_PATH, encoding="utf-8").read().splitlines()]
+    kandian, wjyou, area = [], [], None
+    in_kd_section = False
+    cur = None
+    for s in lines:
+        if not s:
+            continue
+        if s.startswith("第四部分"):
+            in_kd_section = True
+            continue
+        if s.startswith("第五部分"):
+            in_kd_section = False
+            continue
+        if re.match(r"^\d+\. .+说明：", s):          # 万金油条目
+            wjyou.append(s)
+            continue
+        if not in_kd_section:
+            continue
+        if s in AREAS or s.startswith("项目管理原则"):
+            area = s.replace("(尽量记)", "")
+            continue
+        if s.startswith("考点"):
+            if cur:
+                kandian.append(cur)
+            # 源文档里"考点N.题目？正文…"常在同一行，拆开
+            ttl, sep, rest = s.partition("？")
+            ttl = (ttl + "？") if sep else ttl
+            cur = {"area": area or "", "title": ttl, "body": [rest.strip()] if rest.strip() else []}
+            continue
+        if cur is not None:
+            cur["body"].append(s)
+    if cur:
+        kandian.append(cur)
+    return kandian, wjyou
+
+
+def build_daily_card(kandian, wjyou, yday, n_wjyou=5):
+    """今天的知识卡 = 1 个默写考点（全文）+ 5 条万金油（滚动轮换）"""
+    title, parts = "今日知识卡", []
+    if kandian:
+        kd = kandian[yday % len(kandian)]
+        title = f"默写考点·{kd['area']}｜{kd['title'][:18]}"
+        parts.append(f"【今日默写考点 · {kd['area']}】")
+        parts.append(kd["title"])
+        parts.extend(kd["body"])
+    if wjyou:
+        start = (yday * n_wjyou) % len(wjyou)
+        picked = [wjyou[(start + j) % len(wjyou)] for j in range(n_wjyou)]
+        parts.append("")
+        parts.append(f"【今日案例分析万金油 {n_wjyou} 条】")
+        parts.extend(picked)
+    return (title, "\n".join(parts).strip()) if parts else None
 
 
 def load_kouling_sections():
@@ -146,7 +212,7 @@ def build_html(domain, text, card=None):
         c_title, c_body = card
         card_html = f"""
 <div style="padding:20px;border-top:2px dashed #ddd;">
-<div style="font-weight:bold;color:#764ba2;font-size:16px;margin-bottom:8px;">🎯 今日背诵卡：{esc(c_title)}</div>
+<div style="font-weight:bold;color:#764ba2;font-size:16px;margin-bottom:8px;">📖 今日知识卡：{esc(c_title)}</div>
 <div style="white-space:pre-wrap;line-height:1.7;background:#faf8ff;border-left:4px solid #764ba2;padding:12px;border-radius:4px;font-size:14px;">{esc(tidy_md(c_body))}</div>
 </div>
 """
@@ -187,8 +253,11 @@ if __name__ == "__main__":
     idx = datetime.now().timetuple().tm_yday % 10
     # 也支持按日期轮换，避免每天相同
     domain, text = get_kouling_text(idx)
-    cards = load_beisong_cards()
-    card = cards[datetime.now().timetuple().tm_yday % len(cards)] if cards else None
+    # 2026-10-12 起：邮件主体改为《必备知识点-听书版.txt》的内容；
+    # 旧的《背诵清单》卡片（自己编的默写背诵知识点）按用户要求停用。
+    yday = datetime.now().timetuple().tm_yday
+    kandian, wjyou = load_beikao()
+    card = build_daily_card(kandian, wjyou, yday)
     if card:
         print(f"今日背诵卡: {card[0]}（共{len(cards)}张卡轮换）")
     html = build_html(domain, text, card)
