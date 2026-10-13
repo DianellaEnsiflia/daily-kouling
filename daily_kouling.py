@@ -78,15 +78,19 @@ def load_beikao():
     return kandian, wjyou
 
 
-def build_daily_card(kandian, wjyou, yday, n_wjyou=5):
-    """今天的知识卡 = 1 个默写考点（全文）+ 5 条万金油（滚动轮换）"""
+def build_daily_card(kandian, wjyou, yday, n_kandian=3, n_wjyou=5):
+    """今天的知识卡 = 3 个默写考点（全文）+ 5 条万金油（滚动轮换）"""
     title, parts = "今日知识卡", []
     if kandian:
-        kd = kandian[yday % len(kandian)]
-        title = f"默写考点·{kd['area']}｜{kd['title'][:18]}"
-        parts.append(f"【今日默写考点 · {kd['area']}】")
-        parts.append(kd["title"])
-        parts.extend(kd["body"])
+        start = (yday * n_kandian) % len(kandian)
+        picked = [kandian[(start + j) % len(kandian)] for j in range(n_kandian)]
+        areas = "、".join(dict.fromkeys(k["area"] for k in picked if k["area"]))
+        title = f"{n_kandian}个默写考点（{areas}）＋万金油{n_wjyou}条"
+        for n, kd in enumerate(picked, 1):
+            parts.append(f"【今日默写考点 {n}/{n_kandian} · {kd['area']}】")
+            parts.append(kd["title"])
+            parts.extend(kd["body"])
+            parts.append("")
     if wjyou:
         start = (yday * n_wjyou) % len(wjyou)
         picked = [wjyou[(start + j) % len(wjyou)] for j in range(n_wjyou)]
